@@ -1,34 +1,66 @@
 # Compiler and flags
 CXX = g++
-CXXFLAGS = -Wall -Wextra -std=c++17 -pthread -Iinclude
+CXXFLAGS = -std=c++17 -Wall -Wextra -pthread -O2 -Iinclude -Iinclude/messages
 
-# Sources
-SRCS = src/UdpTransport.cpp src/TcpTransport.cpp
-OBJS = $(SRCS:.cpp=.o)
+# Common sources
+COMMON_SRCS = \
+    src/Discovery.cpp \
+    src/PeerToPeerTcpTransport.cpp \
+    src/TcpTransport.cpp \
+    src/UdpTransport.cpp
 
-# Targets
-TARGETS = publisher subscriber tcp_pub tcp_sub tcp_sub_client
+# TCP Publisher app
+PUB_SRC = src/pub_main.cpp
+PUB_TARGET = build/pub_node
 
-# Build rules
-all: $(TARGETS)
+# TCP Subscriber app
+SUB_SRC = src/sub_main.cpp
+SUB_TARGET = build/sub_node
 
-publisher: main_pub.cpp $(OBJS)
-	$(CXX) $(CXXFLAGS) -o $@ main_pub.cpp src/UdpTransport.o
+# UDP Publisher app
+PUB_UDP_SRC = src/pub_udp_main.cpp
+PUB_UDP_TARGET = build/udp_pub_node
 
-subscriber: main_sub.cpp $(OBJS)
-	$(CXX) $(CXXFLAGS) -o $@ main_sub.cpp src/UdpTransport.o
+# UDP Subscriber app
+SUB_UDP_SRC = src/sub_udp_main.cpp
+SUB_UDP_TARGET = build/udp_sub_node
 
-tcp_pub: main_pub_tcp.cpp $(OBJS)
-	$(CXX) $(CXXFLAGS) -o $@ main_pub_tcp.cpp src/TcpTransport.o
+# Default: build all
+all: $(PUB_TARGET) $(SUB_TARGET) $(PUB_UDP_TARGET) $(SUB_UDP_TARGET)
 
-tcp_sub: main_sub_tcp.cpp $(OBJS)
-	$(CXX) $(CXXFLAGS) -o $@ main_sub_tcp.cpp src/TcpTransport.o
+# TCP Publisher build
+$(PUB_TARGET): $(PUB_SRC) $(COMMON_SRCS)
+	@mkdir -p build
+	$(CXX) $(CXXFLAGS) -o $(PUB_TARGET) $(PUB_SRC) $(COMMON_SRCS)
 
-tcp_sub_client: main_sub_tcp_client.cpp $(OBJS)
-	$(CXX) $(CXXFLAGS) -o $@ main_sub_tcp_client.cpp src/TcpTransport.o
+# TCP Subscriber build
+$(SUB_TARGET): $(SUB_SRC) $(COMMON_SRCS)
+	@mkdir -p build
+	$(CXX) $(CXXFLAGS) -o $(SUB_TARGET) $(SUB_SRC) $(COMMON_SRCS)
 
-src/%.o: src/%.cpp
-	$(CXX) $(CXXFLAGS) -c $< -o $@
+# UDP Publisher build
+$(PUB_UDP_TARGET): $(PUB_UDP_SRC) $(COMMON_SRCS)
+	@mkdir -p build
+	$(CXX) $(CXXFLAGS) -o $(PUB_UDP_TARGET) $(PUB_UDP_SRC) $(COMMON_SRCS)
 
+# UDP Subscriber build
+$(SUB_UDP_TARGET): $(SUB_UDP_SRC) $(COMMON_SRCS)
+	@mkdir -p build
+	$(CXX) $(CXXFLAGS) -o $(SUB_UDP_TARGET) $(SUB_UDP_SRC) $(COMMON_SRCS)
+
+# Clean build
 clean:
-	rm -f $(OBJS) $(TARGETS)
+	rm -rf build
+
+# Run commands
+run_pub:
+	./build/pub_node
+
+run_sub:
+	./build/sub_node
+
+run_udp_pub:
+	./build/udp_pub_node
+
+run_udp_sub:
+	./build/udp_sub_node

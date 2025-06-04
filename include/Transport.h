@@ -17,4 +17,5 @@ struct TransportConfig {
     std::string iface_ip = "127.0.0.1";
     std::string multicast_addr = "239.255.0.1";
     bool use_multicast = false;
+    uint16_t dynamic_port = 0;
 };

@@ -1,29 +1,51 @@
 #pragma once
 #include "Transport.h"
-#include <string>
 #include <memory>
+#include <string>
+#include <functional>
+#include <vector>
+#include <cstdint>
 #include <chrono>
 
 class Subscriber {
 public:
-    using Callback = std::function<void(uint32_t, uint64_t, const std::string&)>;
+    // String-based callback (old)
+    using SubscriberCallbackString = std::function<void(uint32_t, uint64_t, const std::string&)>;
 
-    Subscriber(const std::string& topic, Callback cb, std::shared_ptr<Transport> transport)
-    : topic_(topic), callback_(cb), transport_(transport) {
-        transport_->set_receive_callback([this](const std::string& topic, uint32_t seq, uint64_t timestamp, const std::string& msg) {
-            // You can add topic filter here!
-            this->callback_(seq, current_time_us() - timestamp, msg);
-        });
+    // NEW: Raw buffer callback (typed messages)
+    using SubscriberCallbackRaw = std::function<void(uint32_t, uint64_t, const std::vector<uint8_t>&)>;
+
+    // Constructor for string-based subscriber
+    Subscriber(const std::string& topic, std::shared_ptr<Transport> transport, SubscriberCallbackString callback)
+        : topic_(topic), transport_(transport)
+    {
+        transport_->set_receive_callback(
+            [this, callback](const std::string& topic, uint32_t seq, uint64_t timestamp, const std::string& msg) {
+                uint64_t latency_us = now() - timestamp;
+                callback(seq, latency_us, msg);
+            }
+        );
+    }
+
+    // Constructor for raw buffer subscriber
+    Subscriber(const std::string& topic, std::shared_ptr<Transport> transport, SubscriberCallbackRaw callback)
+        : topic_(topic), transport_(transport)
+    {
+        transport_->set_receive_callback(
+            [this, callback](const std::string& topic, uint32_t seq, uint64_t timestamp, const std::string& msg) {
+                std::vector<uint8_t> buffer(msg.begin(), msg.end());
+                uint64_t latency_us = now() - timestamp;
+                callback(seq, latency_us, buffer);
+            }
+        );
     }
 
 private:
-    std::string topic_;
-    Callback callback_;
-    std::shared_ptr<Transport> transport_;
-
-    static uint64_t current_time_us() {
-        using namespace std::chrono;
+    uint64_t now() const {
         return std::chrono::duration_cast<std::chrono::microseconds>(
-            std::chrono::steady_clock::now().time_since_epoch()).count();
+                   std::chrono::steady_clock::now().time_since_epoch()).count();
     }
+
+    std::string topic_;
+    std::shared_ptr<Transport> transport_;
 };
