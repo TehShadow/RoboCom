@@ -1,28 +1,25 @@
 #include "UdpTransport.h"
-#include "Discovery.h"
 #include "Node.h"
 #include "Serialization.h"
 #include "messages/Pose.h"
-#include <thread>
-#include <chrono>
+
 #include <signal.h>
 #include <iostream>
+#include <thread>
+#include <chrono>
 
 int main() {
-    signal(SIGPIPE, SIG_IGN);  // 🚀 Optional → UDP doesn't need it, but good habit
+    signal(SIGPIPE, SIG_IGN);
 
     std::string node_name = "udp_publisher";
 
     TransportConfig config;
-    config.use_multicast = true;  // 🚀 Enable multicast
+    config.use_multicast = true;
+    config.iface_ip = "127.0.0.1";  // or your iface
 
-    // 🚀 Create UDP Transport
     auto transport = std::make_shared<UdpTransport>(config, "pose_topic");
 
-    // 🚀 Discovery is not strictly needed with UDP multicast → but we can still run it!
-    auto discovery = std::make_shared<Discovery>("pose_topic");
-
-    Node node(node_name, transport, discovery);
+    Node node(node_name, transport);
 
     auto pub = node.create_publisher("pose_topic");
 

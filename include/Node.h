@@ -1,50 +1,63 @@
 #pragma once
 #include "Publisher.h"
 #include "Subscriber.h"
-#include "Discovery.h"
+#include "ServiceClient.h"
+#include "ServiceServer.h"
 #include <memory>
 #include <string>
-#include <unordered_map>
 #include <vector>
-#include "PeerToPeerTcpTransport.h"
+#include <unordered_map>
+#include "TypedSubscriber.h"
+#include "TypedServiceClient.h"
 
-class Node {
+class Node : public std::enable_shared_from_this<Node> {
 public:
-    Node(const std::string& name, std::shared_ptr<Transport> transport, std::shared_ptr<Discovery> discovery)
-        : name_(name), transport_(transport), discovery_(discovery) 
-    {
-        // Advertise my port in Discovery!
-        auto p2p = std::dynamic_pointer_cast<PeerToPeerTcpTransport>(transport_);
-        if (p2p) {
-            discovery_->set_local_port(p2p->get_bound_port());
-            discovery_->set_peer_callback([p2p](const std::string& ip, uint16_t port) {
-                p2p->add_peer(ip, port);
-            });
-            discovery_->start();
-        }
-    }
+    Node(const std::string& name, std::shared_ptr<Transport> transport)
+        : name_(name), transport_(transport) {}
 
-    ~Node() {
-        if (discovery_) discovery_->stop();
-    }
-
+    // Publisher
     std::shared_ptr<Publisher> create_publisher(const std::string& topic) {
-        auto pub = std::make_shared<Publisher>(topic, transport_);
-        publishers_[topic] = pub;
-        return pub;
+        return std::make_shared<Publisher>(topic, transport_);
     }
 
-    std::shared_ptr<Subscriber> create_subscriber(const std::string& topic, Subscriber::SubscriberCallbackRaw cb) {
-        auto sub = std::make_shared<Subscriber>(topic, transport_, cb);
-        subscribers_[topic].push_back(sub);
-        return sub;
+    // String-based subscriber (old)
+    std::shared_ptr<Subscriber> create_subscriber(const std::string& topic, Subscriber::SubscriberCallbackString callback) {
+        return std::make_shared<Subscriber>(topic, transport_, callback);
     }
+
+    // RAW buffer subscriber (new)
+    std::shared_ptr<Subscriber> create_subscriber(const std::string& topic, Subscriber::SubscriberCallbackRaw callback) {
+        return std::make_shared<Subscriber>(topic, transport_, callback);
+    }
+
+    template<typename T>
+    std::shared_ptr<TypedSubscriber<T>> create_typed_subscriber(const std::string& topic) {
+        return std::make_shared<TypedSubscriber<T>>(shared_from_this(), topic);
+    }
+
+    // ServiceClient helper
+    template<typename RequestT, typename ResponseT>
+    std::shared_ptr<ServiceClient<RequestT, ResponseT>> create_service_client(const std::string& service_name) {
+        return std::make_shared<ServiceClient<RequestT, ResponseT>>(*this, service_name);
+    }
+
+    // ServiceServer helper
+    template<typename RequestT, typename ResponseT>
+    std::shared_ptr<ServiceServer<RequestT, ResponseT>> create_service_server(const std::string& service_name,
+            typename ServiceServer<RequestT, ResponseT>::HandlerCallback handler) {
+        return std::make_shared<ServiceServer<RequestT, ResponseT>>(*this, service_name, handler);
+    }
+
+    template<typename RequestT, typename ResponseT>
+    std::shared_ptr<ServiceServer<RequestT, ResponseT>> create_typed_service_server(
+        const std::string& service_name,
+        typename ServiceServer<RequestT, ResponseT>::HandlerCallback handler)
+    {
+        return std::make_shared<ServiceServer<RequestT, ResponseT>>(*this, service_name, handler);
+    }
+
 
 private:
     std::string name_;
     std::shared_ptr<Transport> transport_;
-    std::shared_ptr<Discovery> discovery_;
-
-    std::unordered_map<std::string, std::shared_ptr<Publisher>> publishers_;
-    std::unordered_map<std::string, std::vector<std::shared_ptr<Subscriber>>> subscribers_;
 };

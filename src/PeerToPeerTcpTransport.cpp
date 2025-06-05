@@ -1,14 +1,10 @@
 #include "PeerToPeerTcpTransport.h"
 #include <cstring>
 #include <chrono>
-#include <signal.h>  // 🚀 For SIGPIPE ignore
 
 PeerToPeerTcpTransport::PeerToPeerTcpTransport(const TransportConfig& config, const std::string& topic)
-    : running_(true), config_(config), topic_(topic), bound_port_(0)
+    : running_(true), config_(config), topic_(topic)
 {
-    // 🚀 Ignore SIGPIPE → prevents crash on broken pipe
-    signal(SIGPIPE, SIG_IGN);
-
     server_sock_ = socket(AF_INET, SOCK_STREAM, 0);
     if (server_sock_ < 0) {
         perror("socket");
@@ -23,27 +19,38 @@ PeerToPeerTcpTransport::PeerToPeerTcpTransport(const TransportConfig& config, co
 
     sockaddr_in addr{};
     addr.sin_family = AF_INET;
-    addr.sin_port = htons(0);  // Let OS pick a dynamic port
-    addr.sin_addr.s_addr = htonl(INADDR_ANY);
+
+    addr.sin_port = htons(0);  // OS picks port
 
     if (bind(server_sock_, (sockaddr*)&addr, sizeof(addr)) < 0) {
         perror("bind");
         exit(1);
     }
 
-    // Get actual bound port:
     socklen_t addrlen = sizeof(addr);
     getsockname(server_sock_, (sockaddr*)&addr, &addrlen);
-    bound_port_ = ntohs(addr.sin_port);
+    uint16_t actual_port = ntohs(addr.sin_port);
 
-    std::cout << "[PeerToPeerTcpTransport] Bound to port " << bound_port_ << " for topic " << topic_ << std::endl;
+    std::cout << "[PeerToPeerTcpTransport] Bound to port " << actual_port << " for topic " << topic_ << std::endl;
+
+    config_.dynamic_port = actual_port;
 
     if (listen(server_sock_, 10) < 0) {
         perror("listen");
         exit(1);
     }
 
-    std::cout << "[PeerToPeerTcpTransport] Listening on port " << bound_port_ << " for topic " << topic_ << std::endl;
+    std::cout << "[PeerToPeerTcpTransport] Listening on port " << actual_port << " for topic " << topic_ << std::endl;
+
+    // 🚀 Create Discovery automatically
+    discovery_ = std::make_shared<Discovery>(topic_);
+    discovery_->set_local_port(get_listen_port());
+
+    // 🚀 Register peer callback automatically
+    discovery_->set_peer_callback([this](const std::string& ip, uint16_t port) {
+        std::cout << "[Discovery] New peer: " << ip << ":" << port << std::endl;
+        this->add_peer(ip, port);
+    });
 
     server_thread_ = std::thread(&PeerToPeerTcpTransport::server_loop, this);
 }
@@ -72,6 +79,8 @@ PeerToPeerTcpTransport::~PeerToPeerTcpTransport() {
 }
 
 void PeerToPeerTcpTransport::send(const std::string& topic, const std::string& msg, uint32_t seq_num, uint64_t timestamp) {
+    (void)topic;  // silence unused warning
+
     char buffer[1500];
     size_t offset = 0;
 
@@ -85,28 +94,14 @@ void PeerToPeerTcpTransport::send(const std::string& topic, const std::string& m
     offset += msg.size();
 
     std::lock_guard<std::mutex> lock(peers_mutex_);
-
-    for (auto it = peer_socks_.begin(); it != peer_socks_.end(); ) {
-        int sock = *it;
-
+    for (auto sock : peer_socks_) {
         ssize_t sent = write(sock, buffer, offset);
         if (sent < 0) {
             perror("write (peer)");
-            std::cout << "[PeerToPeerTcpTransport] Removing dead peer sock=" << sock << std::endl;
-            close(sock);
-            it = peer_socks_.erase(it);
         } else {
-            std::cout << "[PeerToPeerTcpTransport] Sent to peer sock=" << sock
-                      << " SEQ=" << seq_num << " (" << sent << " bytes)" << std::endl;
-            ++it;
+            std::cout << "[PeerToPeerTcpTransport] Sent to peer sock=" << sock << " SEQ=" << seq_num << std::endl;
         }
     }
-}
-
-void PeerToPeerTcpTransport::add_receive_callback(ReceiveCallback cb) {
-    std::lock_guard<std::mutex> lock(callbacks_mutex_);
-    callbacks_.push_back(cb);
-    std::cout << "[PeerToPeerTcpTransport] Registered subscriber callback (" << callbacks_.size() << " total)" << std::endl;
 }
 
 void PeerToPeerTcpTransport::add_peer(const std::string& peer_ip, uint16_t peer_port) {
@@ -123,12 +118,12 @@ void PeerToPeerTcpTransport::add_peer(const std::string& peer_ip, uint16_t peer_
 
     std::cout << "[PeerToPeerTcpTransport] Connecting to peer " << peer_ip << ":" << peer_port << std::endl;
 
-    while (running_ && connect(sock, (sockaddr*)&addr, sizeof(addr)) < 0) {
+    while (connect(sock, (sockaddr*)&addr, sizeof(addr)) < 0) {
         perror("connect (retrying)");
         std::this_thread::sleep_for(std::chrono::milliseconds(500));
     }
 
-    std::cout << "[PeerToPeerTcpTransport] Connected to peer " << peer_ip << ":" << peer_port << std::endl;
+    std::cout << "[PeerToPeerTcpTransport] Connected to peer " << peer_ip << std::endl;
 
     std::lock_guard<std::mutex> lock(peers_mutex_);
     peer_socks_.push_back(sock);
@@ -183,11 +178,8 @@ void PeerToPeerTcpTransport::client_recv_loop(int client_sock) {
 
         std::string payload(buffer + offset, len - offset);
 
-        {
-            std::lock_guard<std::mutex> lock(callbacks_mutex_);
-            for (auto& cb : callbacks_) {
-                cb(topic_, seq, timestamp, payload);
-            }
+        if (callback_) {
+            callback_(topic_, seq, timestamp, payload);
         }
     }
 

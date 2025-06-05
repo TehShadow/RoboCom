@@ -1,34 +1,34 @@
 #include "PeerToPeerTcpTransport.h"
-#include "Discovery.h"
 #include "Node.h"
+#include "TypedSubscriber.h"
 #include "Serialization.h"
 #include "messages/Pose.h"
+#include <signal.h>
+#include <iostream>
 #include <thread>
 #include <chrono>
-#include <iostream>
 
 int main() {
-    std::string node_name = "subscriber";
+    signal(SIGPIPE, SIG_IGN);
+
+    std::string node_name = "tcp_subscriber";
 
     TransportConfig config;
+
     auto transport = std::make_shared<PeerToPeerTcpTransport>(config, "pose_topic");
 
-    auto discovery = std::make_shared<Discovery>("pose_topic");
+    auto node = std::make_shared<Node>(node_name, transport);
 
-    Node node(node_name, transport, discovery);
+    auto sub = node->create_typed_subscriber<Pose>("pose_topic");
 
-    auto sub = node.create_subscriber("pose_topic",
-        [node_name](uint32_t seq, uint64_t latency_us, const std::vector<uint8_t>& buffer) {
-            Pose pose = deserialize<Pose>(buffer);
+    transport->get_discovery()->start();
 
-            std::cout << "[" << node_name << "] Received Pose: x=" << pose.x
-                    << " y=" << pose.y
-                    << " theta=" << pose.theta
-                    << " (seq=" << seq << ", latency=" << latency_us << " us)" << std::endl;
-        });
-
-    // Spin forever
     while (true) {
+        Pose latest_pose = sub->get_latest();
+        std::cout << "[" << node_name << "] Latest Pose: x=" << latest_pose.x
+                  << " y=" << latest_pose.y
+                  << " theta=" << latest_pose.theta << std::endl;
+
         std::this_thread::sleep_for(std::chrono::seconds(1));
     }
 
