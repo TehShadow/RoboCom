@@ -87,10 +87,12 @@ void TcpTransport::send(const std::string& topic, const std::string& msg, uint32
     offset += msg.size();
 
     ssize_t sent = write(sock_, buffer, offset);
-    if (sent < 0) perror("write");
-
-    std::cout << "[TcpTransport] Sent seq=" << seq_num << " to " << config_.iface_ip
-              << " port=" << map_topic_to_port(topic) << std::endl;
+    if (sent < 0) {
+        perror("write");
+    } else {
+        std::cout << "[TcpTransport] Sent seq=" << seq_num << " to " << config_.iface_ip
+                  << " port=" << map_topic_to_port(topic) << std::endl;
+    }
 }
 
 void TcpTransport::server_loop() {
@@ -108,17 +110,19 @@ void TcpTransport::server_loop() {
 
         std::cout << "[TcpTransport] Client connected!" << std::endl;
 
-        std::lock_guard<std::mutex> lock(clients_mutex_);
+        {
+            std::lock_guard<std::mutex> lock(clients_mutex_);
 
-        // Spawn thread for this client
-        client_threads_.emplace_back(&TcpTransport::client_recv_loop, this, client_sock);
-        client_socks_.push_back(client_sock);
+            client_threads_.emplace_back(&TcpTransport::client_recv_loop, this, client_sock);
+            client_socks_.push_back(client_sock);
+        }
     }
 }
 
 void TcpTransport::add_receive_callback(ReceiveCallback cb) {
     std::lock_guard<std::mutex> lock(callbacks_mutex_);
-    callbacks_.push_back(cb);
+    callbacks_.push_back(std::move(cb));
+
     std::cout << "[TcpTransport] Registered subscriber callback (" << callbacks_.size() << " total)" << std::endl;
 }
 
@@ -126,7 +130,7 @@ void TcpTransport::client_recv_loop(int client_sock) {
     char buffer[1500];
 
     while (running_) {
-        ssize_t len = read(client_sock, buffer, sizeof(buffer)-1);
+        ssize_t len = read(client_sock, buffer, sizeof(buffer) - 1);
         if (len < 0) {
             perror("read");
             break;
@@ -149,40 +153,41 @@ void TcpTransport::client_recv_loop(int client_sock) {
 
         std::string payload(buffer + offset, len - offset);
 
-        std::lock_guard<std::mutex> lock(callbacks_mutex_);
-            // 1️⃣ Dispatch to local subs
-{
-    std::lock_guard<std::mutex> lock(callbacks_mutex_);
-        for (auto& cb : callbacks_) {
-            cb(topic_, seq, timestamp, payload);
+        // 1️⃣ Dispatch to local subscribers
+        {
+            std::lock_guard<std::mutex> lock(callbacks_mutex_);
+            for (auto& cb : callbacks_) {
+                cb(topic_, seq, timestamp, payload);
             }
         }
 
-    {
-        std::lock_guard<std::mutex> lock(clients_mutex_);
-        for (auto csock : client_socks_) {
-            if (csock == client_sock) continue;  // Optional: skip sender
+        // 2️⃣ Optional: Broadcast to other clients (server-side relay)
+        {
+            std::lock_guard<std::mutex> lock(clients_mutex_);
+            for (auto csock : client_socks_) {
+                if (csock == client_sock) continue; // skip sender
 
-            char buffer[1500];
-            size_t offset = 0;
+                char out_buffer[1500];
+                size_t out_offset = 0;
 
-            std::memcpy(buffer + offset, &seq, sizeof(seq));
-            offset += sizeof(seq);
+                std::memcpy(out_buffer + out_offset, &seq, sizeof(seq));
+                out_offset += sizeof(seq);
 
-            std::memcpy(buffer + offset, &timestamp, sizeof(timestamp));
-            offset += sizeof(timestamp);
+                std::memcpy(out_buffer + out_offset, &timestamp, sizeof(timestamp));
+                out_offset += sizeof(timestamp);
 
-            std::memcpy(buffer + offset, payload.data(), payload.size());
-            offset += payload.size();
+                std::memcpy(out_buffer + out_offset, payload.data(), payload.size());
+                out_offset += payload.size();
 
-            ssize_t sent = write(csock, buffer, offset);
-            if (sent < 0) perror("write (broadcast)");
-            else {
-                std::cout << "[TcpTransport] Broadcast to client socket=" << csock
-                        << " msg=" << payload << std::endl;
+                ssize_t sent = write(csock, out_buffer, out_offset);
+                if (sent < 0) {
+                    perror("write (broadcast)");
+                } else {
+                    std::cout << "[TcpTransport] Broadcast to client socket=" << csock
+                              << " msg=" << payload << std::endl;
+                }
             }
         }
-    }
     }
 
     close(client_sock);

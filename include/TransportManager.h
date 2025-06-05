@@ -4,11 +4,19 @@
 #include <memory>
 #include <mutex>
 
+/**
+ * @brief Manages per-topic transport instances.
+ *        Ensures each topic uses a consistent transport.
+ */
 class TransportManager {
 public:
-    TransportManager(const TransportConfig& config)
+    explicit TransportManager(const TransportConfig& config)
         : config_(config) {}
 
+    /**
+     * @brief Get or create transport for a topic.
+     *        Currently uses PeerToPeerTcpTransport.
+     */
     std::shared_ptr<PeerToPeerTcpTransport> get_transport(const std::string& topic) {
         std::lock_guard<std::mutex> lock(mutex_);
 

@@ -19,8 +19,7 @@ PeerToPeerTcpTransport::PeerToPeerTcpTransport(const TransportConfig& config, co
 
     sockaddr_in addr{};
     addr.sin_family = AF_INET;
-
-    addr.sin_port = htons(0);  // OS picks port
+    addr.sin_port = htons(0); // OS picks port
 
     if (bind(server_sock_, (sockaddr*)&addr, sizeof(addr)) < 0) {
         perror("bind");
@@ -42,11 +41,10 @@ PeerToPeerTcpTransport::PeerToPeerTcpTransport(const TransportConfig& config, co
 
     std::cout << "[PeerToPeerTcpTransport] Listening on port " << actual_port << " for topic " << topic_ << std::endl;
 
-    // 🚀 Create Discovery automatically
+    // Create Discovery
     discovery_ = std::make_shared<Discovery>(topic_);
     discovery_->set_local_port(get_listen_port());
 
-    // 🚀 Register peer callback automatically
     discovery_->set_peer_callback([this](const std::string& ip, uint16_t port) {
         std::cout << "[Discovery] New peer: " << ip << ":" << port << std::endl;
         this->add_peer(ip, port);
@@ -58,6 +56,7 @@ PeerToPeerTcpTransport::PeerToPeerTcpTransport(const TransportConfig& config, co
 PeerToPeerTcpTransport::~PeerToPeerTcpTransport() {
     running_ = false;
     close(server_sock_);
+
     if (server_thread_.joinable()) server_thread_.join();
 
     {
@@ -79,7 +78,7 @@ PeerToPeerTcpTransport::~PeerToPeerTcpTransport() {
 }
 
 void PeerToPeerTcpTransport::send(const std::string& topic, const std::string& msg, uint32_t seq_num, uint64_t timestamp) {
-    (void)topic;  // silence unused warning
+    (void)topic;
 
     char buffer[1500];
     size_t offset = 0;
@@ -156,7 +155,7 @@ void PeerToPeerTcpTransport::client_recv_loop(int client_sock) {
     char buffer[1500];
 
     while (running_) {
-        ssize_t len = read(client_sock, buffer, sizeof(buffer)-1);
+        ssize_t len = read(client_sock, buffer, sizeof(buffer) - 1);
         if (len < 0) {
             perror("read");
             break;

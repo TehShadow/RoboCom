@@ -6,6 +6,9 @@
 #include <mutex>
 #include <unordered_set>
 
+/**
+ * @brief Simple multicast-based peer discovery for a given topic.
+ */
 class Discovery {
 public:
     Discovery(const std::string& topic, uint16_t discovery_port = 9999);
@@ -17,8 +20,8 @@ public:
     void set_peer_callback(std::function<void(const std::string&, uint16_t)> cb);
 
     void set_local_port(uint16_t port) {
-    local_port_ = port;
-}
+        local_port_ = port;
+    }
 
 private:
     void recv_loop();
@@ -29,8 +32,11 @@ private:
     std::atomic<bool> running_;
     std::thread recv_thread_;
     std::thread send_thread_;
+
     std::function<void(const std::string&, uint16_t)> peer_callback_;
+
     uint16_t local_port_ = 0;
+
     std::unordered_set<std::string> known_peers_;
     std::mutex peers_mutex_;
 };

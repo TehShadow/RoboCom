@@ -4,6 +4,9 @@
 #include "Node.h"
 #include <mutex>
 
+/**
+ * @brief Typed wrapper for Subscriber.
+ */
 template<typename T>
 class TypedSubscriber {
 public:

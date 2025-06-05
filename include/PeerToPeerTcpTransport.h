@@ -12,6 +12,9 @@
 #include <iostream>
 #include <memory>
 
+/**
+ * @brief TCP-based transport with peer-to-peer connections and multicast discovery.
+ */
 class PeerToPeerTcpTransport : public Transport {
 public:
     PeerToPeerTcpTransport(const TransportConfig& config, const std::string& topic);
@@ -51,5 +54,5 @@ private:
     std::vector<std::thread> client_threads_;
     std::mutex clients_mutex_;
 
-    std::shared_ptr<Discovery> discovery_;  // 🚀 automatic discovery
+    std::shared_ptr<Discovery> discovery_;
 };

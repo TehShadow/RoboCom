@@ -9,85 +9,62 @@ COMMON_SRCS = \
     src/TcpTransport.cpp \
     src/UdpTransport.cpp
 
-# TCP Publisher app
-PUB_SRC = src/pub_main.cpp
-PUB_TARGET = build/pub_node
+# Example sources
+EXAMPLES = \
+    examples/example_service_client.cpp \
+    examples/example_service_server.cpp \
+    examples/example_pub_sub.cpp \
+    examples/example_udp_pub_sub.cpp \
+    examples/example_tcp_pub_sub.cpp
 
-# TCP Subscriber app
-SUB_SRC = src/sub_main.cpp
-SUB_TARGET = build/sub_node
+# Example targets
+EXAMPLE_BINARIES = \
+    build/example_service_client \
+    build/example_service_server \
+    build/example_pub_sub \
+    build/example_udp_pub_sub \
+    build/example_tcp_pub_sub
 
-# UDP Publisher app
-PUB_UDP_SRC = src/pub_udp_main.cpp
-PUB_UDP_TARGET = build/udp_pub_node
+# Default target: build all
+all: $(EXAMPLE_BINARIES)
 
-# UDP Subscriber app
-SUB_UDP_SRC = src/sub_udp_main.cpp
-SUB_UDP_TARGET = build/udp_sub_node
-
-# Service Server app
-SERVICE_SERVER_SRC = src/service_server_main.cpp
-SERVICE_SERVER_TARGET = build/service_server_node
-
-# Service Client app
-SERVICE_CLIENT_SRC = src/service_client_main.cpp
-SERVICE_CLIENT_TARGET = build/service_client_node
-
-# Default: build all
-all: $(PUB_TARGET) $(SUB_TARGET) $(PUB_UDP_TARGET) $(SUB_UDP_TARGET) $(SERVICE_SERVER_TARGET) $(SERVICE_CLIENT_TARGET)
-
-# TCP Publisher build
-$(PUB_TARGET): $(PUB_SRC) $(COMMON_SRCS)
+# Build rules
+build/example_service_client: examples/example_service_client.cpp $(COMMON_SRCS)
 	@mkdir -p build
-	$(CXX) $(CXXFLAGS) -o $(PUB_TARGET) $(PUB_SRC) $(COMMON_SRCS)
+	$(CXX) $(CXXFLAGS) -o $@ $^ 
 
-# TCP Subscriber build
-$(SUB_TARGET): $(SUB_SRC) $(COMMON_SRCS)
+build/example_service_server: examples/example_service_server.cpp $(COMMON_SRCS)
 	@mkdir -p build
-	$(CXX) $(CXXFLAGS) -o $(SUB_TARGET) $(SUB_SRC) $(COMMON_SRCS)
+	$(CXX) $(CXXFLAGS) -o $@ $^
 
-# UDP Publisher build
-$(PUB_UDP_TARGET): $(PUB_UDP_SRC) $(COMMON_SRCS)
+build/example_pub_sub: examples/example_pub_sub.cpp $(COMMON_SRCS)
 	@mkdir -p build
-	$(CXX) $(CXXFLAGS) -o $(PUB_UDP_TARGET) $(PUB_UDP_SRC) $(COMMON_SRCS)
+	$(CXX) $(CXXFLAGS) -o $@ $^
 
-# UDP Subscriber build
-$(SUB_UDP_TARGET): $(SUB_UDP_SRC) $(COMMON_SRCS)
+build/example_udp_pub_sub: examples/example_udp_pub_sub.cpp $(COMMON_SRCS)
 	@mkdir -p build
-	$(CXX) $(CXXFLAGS) -o $(SUB_UDP_TARGET) $(SUB_UDP_SRC) $(COMMON_SRCS)
+	$(CXX) $(CXXFLAGS) -o $@ $^
 
-# Service Server build
-$(SERVICE_SERVER_TARGET): $(SERVICE_SERVER_SRC) $(COMMON_SRCS)
+build/example_tcp_pub_sub: examples/example_tcp_pub_sub.cpp $(COMMON_SRCS)
 	@mkdir -p build
-	$(CXX) $(CXXFLAGS) -o $(SERVICE_SERVER_TARGET) $(SERVICE_SERVER_SRC) $(COMMON_SRCS)
-
-# Service Client build
-$(SERVICE_CLIENT_TARGET): $(SERVICE_CLIENT_SRC) $(COMMON_SRCS)
-	@mkdir -p build
-	$(CXX) $(CXXFLAGS) -o $(SERVICE_CLIENT_TARGET) $(SERVICE_CLIENT_SRC) $(COMMON_SRCS)
+	$(CXX) $(CXXFLAGS) -o $@ $^
 
 # Clean build
 clean:
 	rm -rf build
 
-# Run TCP Pub/Sub
-run_pub:
-	./build/pub_node
-
-run_sub:
-	./build/sub_node
-
-# Run UDP Pub/Sub
-run_udp_pub:
-	./build/udp_pub_node
-
-run_udp_sub:
-	./build/udp_sub_node
-
-# Run Service Server
-run_service_server:
-	./build/service_server_node
-
-# Run Service Client
+# Run targets
 run_service_client:
-	./build/service_client_node
+	./build/example_service_client
+
+run_service_server:
+	./build/example_service_server
+
+run_pub_sub:
+	./build/example_pub_sub
+
+run_udp_pub_sub:
+	./build/example_udp_pub_sub
+
+run_tcp_pub_sub:
+	./build/example_tcp_pub_sub

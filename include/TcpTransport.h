@@ -1,17 +1,22 @@
 #pragma once
 #include "Transport.h"
 #include "TopicPortMapper.h"
-#include "Transport.h"
 #include <thread>
 #include <atomic>
 #include <vector>
+#include <string>
+#include <memory>
+#include <mutex>
 #include <arpa/inet.h>
 #include <unistd.h>
 #include <cstring>
-#include <iostream>
 #include <chrono>
-#include <mutex>
+#include <iostream>
 
+/**
+ * @brief Simple TCP transport with server and client modes.
+ *        Supports multiple subscribers and server-side broadcasts.
+ */
 class TcpTransport : public Transport {
 public:
     TcpTransport(const TransportConfig& config, const std::string& topic, bool is_server);
@@ -19,9 +24,8 @@ public:
 
     void send(const std::string& topic, const std::string& msg, uint32_t seq_num, uint64_t timestamp) override;
 
-    // New: support multiple callbacks
     void set_receive_callback(ReceiveCallback cb) override {
-        add_receive_callback(cb);
+        add_receive_callback(std::move(cb));
     }
 
     void add_receive_callback(ReceiveCallback cb);

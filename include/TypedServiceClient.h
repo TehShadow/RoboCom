@@ -2,7 +2,11 @@
 #include "ServiceClient.h"
 #include <mutex>
 #include <optional>
+#include <chrono>
 
+/**
+ * @brief Typed wrapper for ServiceClient.
+ */
 template<typename RequestT, typename ResponseT>
 class TypedServiceClient {
 public:
@@ -12,7 +16,7 @@ public:
     void call(const RequestT& request) {
         {
             std::lock_guard<std::mutex> lock(mutex_);
-            latest_resp_.reset();  // 🚀 clear previous
+            latest_resp_.reset();
         }
 
         client_.call(request, [this](const ResponseT& resp) {

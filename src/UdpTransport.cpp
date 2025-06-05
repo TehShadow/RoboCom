@@ -21,8 +21,9 @@ UdpTransport::UdpTransport(const TransportConfig& config, const std::string& bin
     if (bind_topic.empty()) {
         // Publisher mode → any port
         addr.sin_port = htons(0);
+        std::cout << "[UdpTransport] Starting in publisher mode." << std::endl;
     } else {
-        // Subscriber mode → bind to topic port!
+        // Subscriber mode → bind to topic port
         uint16_t port = map_topic_to_port(bind_topic);
         addr.sin_port = htons(port);
         std::cout << "[UdpTransport] Binding to port " << port << " for topic " << bind_topic << std::endl;
@@ -35,13 +36,13 @@ UdpTransport::UdpTransport(const TransportConfig& config, const std::string& bin
         exit(1);
     }
 
-    // Set TTL higher
+    // Set TTL
     int ttl = 16;
     if (setsockopt(sock_, IPPROTO_IP, IP_MULTICAST_TTL, &ttl, sizeof(ttl)) < 0) {
         perror("setsockopt: IP_MULTICAST_TTL");
     }
 
-    // Conditionally join multicast
+    // Multicast if requested
     if (config_.use_multicast && config_.iface_ip != "127.0.0.1") {
         ip_mreq mreq{};
         inet_pton(AF_INET, config_.multicast_addr.c_str(), &mreq.imr_multiaddr);
@@ -93,11 +94,13 @@ void UdpTransport::send(const std::string& topic, const std::string& msg, uint32
     offset += msg.size();
 
     ssize_t sent = sendto(sock_, buffer, offset, 0, (sockaddr*)&addr, sizeof(addr));
-    if (sent < 0) perror("sendto");
-
-    std::cout << "[UdpTransport] Sent seq=" << seq_num << " to " 
-              << (config_.use_multicast ? config_.multicast_addr : config_.iface_ip)
-              << " port=" << port << std::endl;
+    if (sent < 0) {
+        perror("sendto");
+    } else {
+        std::cout << "[UdpTransport] Sent seq=" << seq_num << " to "
+                  << (config_.use_multicast ? config_.multicast_addr : config_.iface_ip)
+                  << " port=" << port << std::endl;
+    }
 }
 
 void UdpTransport::recv_loop() {
@@ -107,7 +110,7 @@ void UdpTransport::recv_loop() {
         sockaddr_in src_addr{};
         socklen_t addrlen = sizeof(src_addr);
 
-        ssize_t len = recvfrom(sock_, buffer, sizeof(buffer)-1, 0, (sockaddr*)&src_addr, &addrlen);
+        ssize_t len = recvfrom(sock_, buffer, sizeof(buffer) - 1, 0, (sockaddr*)&src_addr, &addrlen);
         if (len < 0) {
             perror("recvfrom");
             continue;
