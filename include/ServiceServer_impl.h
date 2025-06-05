@@ -1,44 +1,39 @@
 #pragma once
-#include "Node.h"  // 🚀 Now safe — no circular dependency!
+#include "ServiceServer.h"
+#include "Serialization.h"
+#include "PeerToPeerTcpTransport.h"
+#include "ServiceHeader.h"  // 🚀 new include
 
 template<typename RequestT, typename ResponseT>
-ServiceServer<RequestT, ResponseT>::ServiceServer(Node& node, const std::string& service_name, HandlerCallback handler)
+ServiceServer<RequestT, ResponseT>::ServiceServer(std::shared_ptr<Node> node, const std::string& service_name, HandlerCallback handler)
     : node_(node), service_name_(service_name), handler_(handler)
 {
-    request_sub_ = node_.create_subscriber(service_name_ + "/request",
-        [this](uint32_t seq, uint64_t latency_us, const std::vector<uint8_t>& buffer) {
-            ServiceHeader header;
-            std::memcpy(&header, buffer.data(), sizeof(header));
+    auto transport_manager = node_->get_transport_manager();
 
-            {
-                std::lock_guard<std::mutex> lock(proc_mutex_);
-                if (processed_requests_.count(header.request_id) > 0) {
-                    std::cout << "[ServiceServer] Duplicate request_id=" << header.request_id << " → IGNORE" << std::endl;
-                    return;
-                }
-                processed_requests_.insert(header.request_id);
-            }
+    auto req_transport = transport_manager->get_transport(service_name_ + "/request");
+    auto resp_transport = transport_manager->get_transport(service_name_ + "/response");
 
-            RequestT request = deserialize<RequestT>(
-                std::vector<uint8_t>(buffer.begin() + sizeof(header), buffer.end()));
-
-            std::cout << "[ServiceServer] Processing request_id=" << header.request_id << std::endl;
+    request_sub_ = std::make_shared<Subscriber>(service_name_ + "/request", req_transport,
+        [this](uint32_t seq, uint64_t latency_us, const std::string& msg) {
+            auto buffer = std::vector<uint8_t>(msg.begin(), msg.end());
+            size_t offset = 0;
+            auto request_header = deserialize<ServiceHeader>(buffer, offset);
+            auto request = deserialize<RequestT>(buffer, offset);
 
             ResponseT response = handler_(request);
 
-            ServiceHeader response_header{ header.request_id };
-            auto resp_buffer = serialize(response);
+            ServiceHeader response_header{request_header.request_id};
+            auto header_bytes = serialize(response_header);
+            auto body_bytes = serialize(response);
 
-            std::vector<uint8_t> out_buffer(sizeof(response_header) + resp_buffer.size());
-            std::memcpy(out_buffer.data(), &response_header, sizeof(response_header));
-            std::memcpy(out_buffer.data() + sizeof(response_header), resp_buffer.data(), resp_buffer.size());
+            std::vector<uint8_t> full_resp;
+            full_resp.insert(full_resp.end(), header_bytes.begin(), header_bytes.end());
+            full_resp.insert(full_resp.end(), body_bytes.begin(), body_bytes.end());
 
-            if (!response_pub_) {
-                response_pub_ = node_.create_publisher(service_name_ + "/response");
-            }
+            response_pub_->publish_raw(full_resp);
 
-            response_pub_->publish_raw(out_buffer);
-
-            std::cout << "[ServiceServer] Sent response for request_id=" << header.request_id << std::endl;
+            std::cout << "[ServiceServer] Replied to request ID=" << request_header.request_id << std::endl;
         });
+
+    response_pub_ = std::make_shared<Publisher>(service_name_ + "/response", resp_transport);
 }

@@ -1,32 +1,26 @@
 #pragma once
-class Node;  // 🚀 Forward declare
-
-#include "ServiceHeader.h"
-#include "Serialization.h"
-#include <unordered_set>
-#include <functional>
-#include <string>
+#include "Publisher.h"
+#include "Subscriber.h"
+#include "ServiceHeader.h"  // 🚀 add this
 #include <memory>
+#include <string>
 #include <mutex>
-#include <iostream>
+#include <functional>
 
 template<typename RequestT, typename ResponseT>
 class ServiceServer {
 public:
     using HandlerCallback = std::function<ResponseT(const RequestT&)>;
 
-    ServiceServer(Node& node, const std::string& service_name, HandlerCallback handler);
+    ServiceServer(std::shared_ptr<Node> node, const std::string& service_name, HandlerCallback handler);
 
 private:
-    Node& node_;
+    std::shared_ptr<Node> node_;
     std::string service_name_;
     HandlerCallback handler_;
-    std::shared_ptr<class Subscriber> request_sub_;
-    std::shared_ptr<class Publisher> response_pub_;
 
-    std::unordered_set<uint64_t> processed_requests_;
-    std::mutex proc_mutex_;
+    std::shared_ptr<Subscriber> request_sub_;
+    std::shared_ptr<Publisher> response_pub_;
 };
 
-// 🚀 Include the implementation template
 #include "ServiceServer_impl.h"

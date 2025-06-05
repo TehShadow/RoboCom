@@ -10,10 +10,35 @@ public:
         : client_(node, service_name) {}
 
     void call(const RequestT& request) {
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            latest_resp_.reset();  // 🚀 clear previous
+        }
+
         client_.call(request, [this](const ResponseT& resp) {
             std::lock_guard<std::mutex> lock(mutex_);
             latest_resp_ = resp;
         });
+    }
+
+    bool wait_for_response(int timeout_ms = 1000) {
+        using namespace std::chrono;
+        auto start = steady_clock::now();
+
+        while (true) {
+            {
+                std::lock_guard<std::mutex> lock(mutex_);
+                if (latest_resp_.has_value()) {
+                    return true;
+                }
+            }
+
+            if (duration_cast<milliseconds>(steady_clock::now() - start).count() > timeout_ms) {
+                return false;
+            }
+
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
     }
 
     ResponseT get_latest_response() const {

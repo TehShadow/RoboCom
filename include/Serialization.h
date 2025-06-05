@@ -16,3 +16,11 @@ T deserialize(const std::vector<uint8_t>& buffer) {
     std::memcpy(&msg, buffer.data(), sizeof(T));
     return msg;
 }
+
+template<typename T>
+T deserialize(const std::vector<uint8_t>& buffer, size_t& offset) {
+    T msg;
+    std::memcpy(&msg, buffer.data() + offset, sizeof(T));
+    offset += sizeof(T);
+    return msg;
+}

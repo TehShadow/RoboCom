@@ -9,3 +9,12 @@ struct MyService_Request {
 struct MyService_Response {
     int32_t sum;
 };
+
+struct SumRequest {
+    int32_t num1;
+    int32_t num2;
+};
+
+struct SumResponse {
+    int32_t sum;
+};

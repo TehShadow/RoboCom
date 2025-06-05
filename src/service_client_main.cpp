@@ -1,9 +1,7 @@
 #include "PeerToPeerTcpTransport.h"
 #include "Node.h"
 #include "TypedServiceClient.h"
-#include "Serialization.h"
-#include "messages/Pose.h"
-
+#include "messages/Service.h"
 #include <signal.h>
 #include <iostream>
 #include <thread>
@@ -12,35 +10,35 @@
 int main() {
     signal(SIGPIPE, SIG_IGN);
 
-    std::string node_name = "service_client";
+    std::string node_name = "sum_service_client";
 
     TransportConfig config;
 
-    auto transport = std::make_shared<PeerToPeerTcpTransport>(config, "pose_service");
+    // 🚀 Create Node with TransportManager inside
+    auto node = std::make_shared<Node>(node_name, config);
 
-    auto node = std::make_shared<Node>(node_name, transport);
+    // 🚀 TypedServiceClient will now use Node's TransportManager
+    auto client = std::make_shared<TypedServiceClient<SumRequest, SumResponse>>(node, "sum_service");
 
-    auto client = std::make_shared<TypedServiceClient<Pose, Pose>>(node, "pose_service");
-
-    transport->get_discovery()->start();
-
-    uint32_t count = 0;
+    int count = 0;
 
     while (true) {
-        Pose pose;
-        pose.x = count * 1.0f;
-        pose.y = count * 2.0f;
-        pose.theta = count * 0.1f;
+        SumRequest req;
+        req.num1 = count;
+        req.num2 = count + 10;
 
-        client->call(pose);
+        client->call(req);
 
-        Pose latest_resp = client->get_latest_response();
-        std::cout << "[service_client] Latest Response: x=" << latest_resp.x
-                  << " y=" << latest_resp.y
-                  << " theta=" << latest_resp.theta << std::endl;
+        if (client->wait_for_response(500)) {
+            SumResponse latest_resp = client->get_latest_response();
+            std::cout << "[sum_service_client] Request: " << req.num1 << " + " << req.num2
+                      << " → Response: " << latest_resp.sum << std::endl;
+        } else {
+            std::cout << "[sum_service_client] Timeout waiting for response!" << std::endl;
+        }
 
         count++;
-        std::this_thread::sleep_for(std::chrono::milliseconds(2000));
+        std::this_thread::sleep_for(std::chrono::seconds(2));
     }
 
     return 0;

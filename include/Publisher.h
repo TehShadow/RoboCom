@@ -23,6 +23,11 @@ public:
         transport_->send(topic_, std::string(buffer.begin(), buffer.end()), sequence_number_++, timestamp);
     }
 
+    bool has_peers() const {
+    return true; // 🚀 Placeholder — will implement real count later
+    }
+
+
 private:
     uint64_t now() const {
         return std::chrono::duration_cast<std::chrono::microseconds>(
